@@ -1,0 +1,7 @@
+numpy
+warnings
+lightkurve
+tensorflow
+pickle
+matplotlib
+sklearn
