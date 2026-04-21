@@ -1,7 +1,16 @@
+# --- Analyse de données et Calcul ---
 numpy
-warnings
+scipy
+
+# --- Astronomie ---
 lightkurve
+
+# --- Machine Learning & IA ---
 tensorflow
-pickle
+scikit-learn
+
+# --- Utilitaires et Graphiques ---
 matplotlib
-sklearn
+pickle5
+
+# --- Gestion des avertissements (inclus dans Python, pas besoin d'install) ---
