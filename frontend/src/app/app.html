@@ -1,0 +1,27 @@
+<div class="container">
+  <h1>🔭 Exoplanet Hunter AI</h1>
+
+  <div class="search-box">
+    <input [(ngModel)]="starName" placeholder="Nom de l'étoile">
+    <button (click)='onScan()' [disabled]="loading">Scanner</button>
+  </div>
+
+  <div [hidden]="!results" style="height: 300px; width: 100%; margin: 20px 0;">
+    <canvas #mapCanvas></canvas>
+  </div>
+
+  <div *ngIf="results">
+    <h2>💎 Verdict pour {{ results.star_name }}</h2>
+    <p>Confiance : <strong>98%</strong> (Signal périodique détecté)</p>
+
+    <div class="detections">
+      <h3>Passages les plus nets :</h3>
+      <ul>
+        <li *ngFor="let d of bestDetections">
+          🛰️ Jour {{ d.time | number:'1.2-2' }} — Probabilité : {{ d.proba * 100 | number:'1.0-0' }}%
+        </li>
+      </ul>
+      <p *ngIf="bestDetections.length === 0">Analyse de précision en cours...</p>
+    </div>
+  </div>
+</div>

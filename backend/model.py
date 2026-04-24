@@ -68,34 +68,23 @@ def build_cnn(input_shape:tuple = (200,1))-> tf.keras.Model:
     """
 
     model = models.Sequential([
-        layers.Conv1D(32,kernel_size=15, activation='relu', padding='same', input_shape=input_shape ),
+        layers.Conv1D(16, kernel_size=15, activation='relu', padding='same', input_shape=input_shape),
         layers.MaxPooling1D(pool_size=2),
-
-
-        layers.Conv1D(64, kernel_size=10, activation='relu', padding='same'),
-        layers.MaxPooling1D(pool_size=2),
-
-        layers.Conv1D(128, kernel_size=5, activation='relu', padding='same'),
- 
-        
+        layers.Conv1D(32, kernel_size=10, activation='relu', padding='same'),
         layers.GlobalAveragePooling1D(),
-
-        layers.Dense(64,activation='relu'),
-        layers.Dropout(0.3), 
-        layers.Dense(32,activation='relu'),
-        layers.Dropout(0.2),
- 
-        # Sortie : probabilité de transit
+        layers.Dense(32, activation='relu'),
+        layers.Dropout(0.3),
         layers.Dense(1, activation='sigmoid')
-
-
-
-
     ])
 
-    model.compile(optimizer='adam',loss='binary_crossentropy',metrics=['accuracy', tf.keras.metrics.Recall(name='recall'),tf.keras.metrics.Precision(name='precision')])
-
-    return model 
+    model.compile(
+        optimizer=tf.keras.optimizers.Adam(learning_rate=0.001),
+        loss='binary_crossentropy',
+        metrics=['accuracy',
+                 tf.keras.metrics.Recall(name='recall'),
+                 tf.keras.metrics.Precision(name='precision')]
+    )
+    return model
 
 
 
@@ -124,7 +113,7 @@ def train(X:np.ndarray, y:np.ndarray) -> tf.keras.Model:
 
     weights = compute_class_weight('balanced', classes=classes,y=y_train)
 
-    class_weight = {0: 1.0, 1: 3.0}
+    class_weight = {0: 1.0, 1: 8.0}
     print(f"\nclass_weight : {class_weight}")
     print(f"→ Une erreur sur transit pénalise {weights[1]:.1f}x plus")
 
@@ -133,10 +122,12 @@ def train(X:np.ndarray, y:np.ndarray) -> tf.keras.Model:
 
     callbacks=[
 
-         tf.keras.callbacks.EarlyStopping(monitor='val_loss', 
-            patience=5, 
-            mode='min', 
-            restore_best_weights=True),
+            tf.keras.callbacks.EarlyStopping(
+                monitor='val_recall',
+                patience=5,
+                mode='max',
+                restore_best_weights=True
+            ),
 
          tf.keras.callbacks.ReduceLROnPlateau(monitor='val_loss',factor=0.5,patience=3,verbose=1)
 
@@ -237,10 +228,13 @@ def predict(flux_segment: np.ndarray,
 #     print("\n✅ Test terminé — modèle fonctionnel")
 
 if __name__ == "__main__":
-    from data import build_dataset
+    from augmentation import build_combined_dataset
     
-    print("📥 Chargement des vraies données Kepler...")
-    X, y = build_dataset()
+    print("📥 Chargement dataset combiné...")
+    X, y = build_combined_dataset(
+        exotrain_path='exoTrain.csv',
+        use_lightkurve=True
+    )
     
     model = train(X, y)
 
