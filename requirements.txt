@@ -1,0 +1,16 @@
+# --- Analyse de données et Calcul ---
+numpy
+scipy
+
+# --- Astronomie ---
+lightkurve
+
+# --- Machine Learning & IA ---
+tensorflow
+scikit-learn
+
+# --- Utilitaires et Graphiques ---
+matplotlib
+
+
+# --- Gestion des avertissements (inclus dans Python, pas besoin d'install) ---
