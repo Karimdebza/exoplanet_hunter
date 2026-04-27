@@ -113,7 +113,7 @@ def train(X:np.ndarray, y:np.ndarray) -> tf.keras.Model:
 
     weights = compute_class_weight('balanced', classes=classes,y=y_train)
 
-    class_weight = {0: 1.0, 1: 8.0}
+    class_weight = {0: 1.0, 1: 1.5}
     print(f"\nclass_weight : {class_weight}")
     print(f"→ Une erreur sur transit pénalise {weights[1]:.1f}x plus")
 
@@ -123,9 +123,9 @@ def train(X:np.ndarray, y:np.ndarray) -> tf.keras.Model:
     callbacks=[
 
             tf.keras.callbacks.EarlyStopping(
-                monitor='val_recall',
+                 monitor='val_loss',
                 patience=5,
-                mode='max',
+                mode='min',
                 restore_best_weights=True
             ),
 

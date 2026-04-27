@@ -20,14 +20,23 @@ import pickle
 # t0       = temps du premier transit connu (BKJD)
 # ─────────────────────────────────────────────
 KNOWN_PLANETS = {
+    # Déjà là
     'Kepler-10': {'period': 0.8375,  'duration': 0.019, 't0': 130.308},
     'Kepler-90': {'period': 7.0082,  'duration': 0.064, 't0': 134.082},
     'Kepler-7':  {'period': 4.8855,  'duration': 0.125, 't0': 136.853},
     'Kepler-5':  {'period': 3.5485,  'duration': 0.120, 't0': 122.892},
-    # 'Kepler-6':  {'period': 3.2347,  'duration': 0.110, 't0': 121.486},
     'Kepler-8':  {'period': 3.5225,  'duration': 0.107, 't0': 120.960},
     'Kepler-12': {'period': 4.4380,  'duration': 0.155, 't0': 123.955},
     'Kepler-17': {'period': 1.4857,  'duration': 0.094, 't0': 120.623},
+    # Nouvelles — toutes confirmées NASA
+    'Kepler-4':  {'period': 3.2136,  'duration': 0.097, 't0': 121.731},
+    'Kepler-6':  {'period': 3.2347,  'duration': 0.110, 't0': 121.486},
+    'Kepler-11': {'period': 10.3039, 'duration': 0.108, 't0': 171.763},
+    'Kepler-13': {'period': 1.7637,  'duration': 0.098, 't0': 121.530},
+    'Kepler-15': {'period': 4.9429,  'duration': 0.130, 't0': 122.998},
+    'Kepler-18': {'period': 3.5047,  'duration': 0.090, 't0': 121.449},
+    'Kepler-41': {'period': 1.8556,  'duration': 0.085, 't0': 120.976},
+    'Kepler-43': {'period': 3.0241,  'duration': 0.105, 't0': 121.855},
 }
 
 WINDOW_SIZE = 200   # Nombre de points par segment (environ 4 heures de données Kepler)
@@ -120,7 +129,7 @@ def make_segments(time: np.ndarray, flux: np.ndarray,
     return np.array(segments), np.array(labels)
 
 
-def build_dataset(stars: dict = None, quarters:  list = [3, 4, 5]) -> tuple:
+def build_dataset(stars: dict = None, quarters:  list = [2, 3, 4, 5, 6]) -> tuple:
     """
     Construit le dataset complet pour l'entraînement.
     
