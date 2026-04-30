@@ -60,39 +60,44 @@ from validation.phase_folder import FoldedTransit, CNN_INPUT_LENGTH
 DEFAULT_MODEL_PATH = "models/exoplanet_cnn_v3.h5"
 DEFAULT_THRESHOLD = 0.5  # Seuil de décision passed/failed
 
+def _normalize_input(X:np.ndarray) -> np.ndarray:
+    """
+    Centre les flux autour de 0 pour stabiliser l'apprentissage.
+    
+    flux nominal = 1.0 → après centrage = 0.0
+    transit profond = 0.99 → -0.01
+    
+    Cette normalisation DOIT être appliquée IDENTIQUEMENT à l'entraînement
+    et à l'inférence. Sinon = data leak silencieux.
+    """
+    return X - 1.0
 
 def build_cnn(input_length: int = CNN_INPUT_LENGTH) -> tf.keras.Model:
-    """
-    Construit l'architecture CNN. Aucun entraînement ici.
-    
-    Returns:
-        Modèle Keras compilé, prêt à entraîner ou charger des poids.
-    """
+    """Architecture CNN v3.1 — sans BatchNorm, avec Dropout distribué."""
     model = models.Sequential([
         layers.Input(shape=(input_length, 1)),
         
-        # Bloc 1 : extraction de motifs locaux (ingress, egress, fond)
+        # Bloc 1 : motifs locaux (ingress, egress, fond)
         layers.Conv1D(16, kernel_size=11, activation='relu', padding='same'),
-        layers.BatchNormalization(),
         layers.MaxPooling1D(pool_size=2),
+        layers.Dropout(0.2),
         
-        # Bloc 2 : combinaison de motifs locaux en formes globales
+        # Bloc 2 : motifs globaux (transit complet)
         layers.Conv1D(32, kernel_size=7, activation='relu', padding='same'),
-        layers.BatchNormalization(),
         layers.MaxPooling1D(pool_size=2),
+        layers.Dropout(0.2),
         
-        # Réduction : moyenne globale sur toute la séquence
-        # → invariance par translation : le transit peut être un peu décalé
+        # Réduction par moyenne globale
         layers.GlobalAveragePooling1D(),
         
         # Tête de classification
         layers.Dense(32, activation='relu'),
-        layers.Dropout(0.3),
+        layers.Dropout(0.4),
         layers.Dense(1, activation='sigmoid'),
     ])
     
     model.compile(
-        optimizer=tf.keras.optimizers.Adam(learning_rate=0.001),
+        optimizer=tf.keras.optimizers.Adam(learning_rate=0.0005),
         loss='binary_crossentropy',
         metrics=[
             'accuracy',
@@ -102,7 +107,7 @@ def build_cnn(input_length: int = CNN_INPUT_LENGTH) -> tf.keras.Model:
         ]
     )
     return model
-
+ 
 
 def train_cnn(
     X: np.ndarray,
@@ -112,53 +117,41 @@ def train_cnn(
     batch_size: int = 32,
     verbose: int = 1,
 ) -> tf.keras.Model:
-    """
-    Entraîne le CNN sur des transits phase-foldés.
-    
-    Args:
-        X: Shape (n_samples, CNN_INPUT_LENGTH, 1) — transits foldés normalisés
-        y: Shape (n_samples,) — labels 0 (faux positif) / 1 (vrai transit)
-        model_path: Chemin de sauvegarde du modèle entraîné
-    
-    Returns:
-        Modèle entraîné, déjà sauvegardé sur disque.
-    
-    POINTS CRUCIAUX :
-    - stratify=y : split train/test garde les mêmes proportions de classes
-    - class_weight : compense l'éventuel déséquilibre du dataset
-    - EarlyStopping : arrête si val_loss stagne — évite le surapprentissage
-    """
+    """Entraîne le CNN sur des transits phase-foldés normalisés."""
     print("=" * 60)
-    print("ENTRAÎNEMENT CNN v3 — Phase-folded transits")
+    print("ENTRAÎNEMENT CNN v3.1 — Phase-folded transits")
     print("=" * 60)
     print(f"Dataset : {X.shape[0]} échantillons de {X.shape[1]} points")
     print(f"Positifs : {int(y.sum())} ({y.mean()*100:.1f}%)")
     print(f"Négatifs : {int((1-y).sum())} ({(1-y).mean()*100:.1f}%)")
     
-    # Split train/test stratifié
+    # NORMALISATION : centrer autour de 0
+    X_normalized = _normalize_input(X)
+    print(f"Range après normalisation : [{X_normalized.min():.4f}, {X_normalized.max():.4f}]")
+    
     X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=0.2, random_state=42, stratify=y
+        X_normalized, y, test_size=0.2, random_state=42, stratify=y
     )
     
-    # Pondération automatique pour classes déséquilibrées
     class_weights_array = compute_class_weight(
         'balanced', classes=np.unique(y_train), y=y_train
     )
     class_weight = {0: float(class_weights_array[0]), 1: float(class_weights_array[1])}
     print(f"\nclass_weight: {class_weight}")
     
-    # Callbacks d'entraînement
     callbacks = [
         tf.keras.callbacks.EarlyStopping(
-            monitor='val_loss', patience=5, mode='min',
-            restore_best_weights=True, verbose=1
+            monitor='val_auc',
+            mode='max',
+            patience=8,
+            restore_best_weights=True,
+            verbose=1
         ),
         tf.keras.callbacks.ReduceLROnPlateau(
-            monitor='val_loss', factor=0.5, patience=3, verbose=1
+            monitor='val_loss', factor=0.5, patience=4, verbose=1
         ),
     ]
     
-    # Construction et entraînement
     model = build_cnn(input_length=X.shape[1])
     if verbose:
         model.summary()
@@ -174,7 +167,7 @@ def train_cnn(
         verbose=verbose,
     )
     
-    # Évaluation finale sur le set test (jamais vu pendant l'entraînement)
+    # Évaluation finale
     print("\n" + "=" * 60)
     print("ÉVALUATION SUR TEST")
     print("=" * 60)
@@ -182,14 +175,23 @@ def train_cnn(
     for name, val in zip(model.metrics_names, results):
         print(f"  {name:12s} : {val:.4f}")
     
-    # Sauvegarde
+    # Diagnostics
+    if 'auc' in model.metrics_names:
+        test_auc = results[model.metrics_names.index('auc')]
+        if test_auc < 0.7:
+            print("\n⚠️  AUC de test faible (< 0.7) — le modèle a du mal à généraliser.")
+        elif test_auc < 0.9:
+            print("\n✓ AUC correct mais améliorable.")
+        else:
+            print("\n✅ AUC excellent — modèle prêt à l'usage.")
+    
     os.makedirs(os.path.dirname(model_path), exist_ok=True)
     model.save(model_path)
     print(f"\n💾 Modèle sauvegardé → {model_path}")
     
     return model
-
-
+ 
+ 
 def predict(
     folded: FoldedTransit,
     model: tf.keras.Model,
@@ -198,16 +200,12 @@ def predict(
     """
     Prédit si un transit phase-foldé ressemble à une vraie planète.
     
-    Args:
-        folded: Transit phase-foldé (output de phase_folder.fold_transit)
-        model: Modèle CNN chargé
-        threshold: Seuil de décision (défaut 0.5)
-    
-    Returns:
-        CNNValidation avec score, verdict, et raison de rejet si applicable.
+    IMPORTANT : applique la MÊME normalisation qu'à l'entraînement.
     """
-    X = folded.to_cnn_input()
-    score = float(model.predict(X, verbose=0)[0][0])
+    X_raw = folded.to_cnn_input()
+    X_normalized = _normalize_input(X_raw)  # cohérence train/inference
+    
+    score = float(model.predict(X_normalized, verbose=0)[0][0])
     passed = score >= threshold
     
     rejection_reason = None
@@ -223,7 +221,6 @@ def predict(
         passed=passed,
         rejection_reason=rejection_reason,
     )
-
 
 def load_model(model_path: str = DEFAULT_MODEL_PATH) -> tf.keras.Model:
     """Charge un modèle pré-entraîné. Plante proprement si introuvable."""

@@ -43,7 +43,7 @@ from validation.phase_folder import fold_transit
 from validation.cnn_model import load_model, predict, DEFAULT_MODEL_PATH
 
 
-def download_and_clean(star_name: str, quarters: list[int]) -> CleanedLightCurve:
+def download_and_clean(star_name: str, quarters: list[int],max_transit_duration_hours: float = 8.0) -> CleanedLightCurve:
     """Couche 1 : ingestion."""
     print(f"\n📡 Téléchargement {star_name} (quarters {quarters})...")
     
@@ -57,7 +57,19 @@ def download_and_clean(star_name: str, quarters: list[int]) -> CleanedLightCurve
     
     lc = lc_collection.stitch()
     lc = lc.remove_nans().remove_outliers(sigma=5)
-    lc = lc.flatten(window_length=401)
+    # --- LA RÈGLE DU FACTEUR 3 DE KARIM ---
+    max_tansit_days =  max_transit_duration_hours / 24.0
+    window_days = 3 * max_tansit_days
+    cadence_jours = np.median(np.diff(lc.time.value))
+    window_size = int(window_days / cadence_jours)
+    
+    if window_size % 2 == 0:
+        window_size +=1
+    print(f"   ⚙️ Durée max attendue : {max_transit_duration_hours}h")
+    print(f"   ⚙️ Fenêtre de lissage dynamique : {window_size} points ({window_days:.2f} jours)")
+
+    lc = lc.flatten(window_length=window_size, polyorder=2)
+    lc = lc.remove_outliers(sigma=4)
     
     cleaned = CleanedLightCurve(
         time=np.array(lc.time.value),
