@@ -41,6 +41,7 @@ from core.types import CleanedLightCurve
 from detection.bls_scanner import detect_signals
 from validation.phase_folder import fold_transit
 from validation.cnn_model import load_model, predict, DEFAULT_MODEL_PATH
+from validation.physical_validator import validate
 
 
 def download_and_clean(star_name: str, quarters: list[int],max_transit_duration_hours: float = 8.0) -> CleanedLightCurve:
@@ -152,6 +153,10 @@ def explore(star_name: str, quarters: list[int], output_dir: str = "outputs"):
             continue
         
         validation = predict(folded, model)
+        physical = validate(lc, validation)
+        print(f"   🔬 {physical.classification} (confidence={physical.confidence:.2f})")
+        for test in physical.tests:
+            print(f"      {test}")
         
         verdict = "✓ PASS" if validation.passed else "✗ FAIL"
         print(

@@ -161,91 +161,97 @@ def _generate_sinusoidal(amplitude: float, n_cycles: float, noise_level: float) 
 # ─────────────────────────────────────────────────────────────────────────────
 
 def build_synthetic_dataset(
-    n_positives: int = 2000,
-    n_negatives: int = 2000,
+    n_positives: int = 5000,
+    n_negatives: int = 5000,
     seed: int = 42,
 ) -> tuple[np.ndarray, np.ndarray]:
     """
-    Construit un dataset synthétique pour entraîner le CNN.
-    
-    Args:
-        n_positives: Nombre de vrais transits à générer
-        n_negatives: Nombre de faux positifs à générer
-    
-    Returns:
-        (X, y) où X.shape = (n_pos + n_neg, CNN_INPUT_LENGTH, 1)
-        et y est binaire (1 = transit, 0 = faux positif)
+    Dataset v3.3 — fusion meilleur de Gemini + rigueur originale.
+
+    POSITIFS (2 types) :
+    - 30% boîtes : Hot Jupiters (ingress/egress quasi-instantanés)
+    - 70% U-shapes cos² : transits réalistes avec limb darkening
+
+    Pourquoi garder les boîtes ? Si on entraîne UNIQUEMENT sur U-shapes,
+    le CNN apprend "épaules douces = planète" et REJETTE les vrais Hot Jupiters
+    qui ont un profil rectangulaire. Les deux formes sont physiquement valides.
+
+    NÉGATIFS (4 types, tous avec bruit ET duration ALÉATOIRES) :
+    - V-shapes : binaires à éclipses grazing
+    - Sinusoïdes : variabilité stellaire / pulsations
+    - Asymétriques : taches stellaires, défauts instrumentaux
+    - Bruit pur : faux candidats BLS sans signal réel
+
+    CORRECTION v3.2 (Gemini) :
+    - Bug : bruit et duration_frac FIXES pour les négatifs
+    → CNN apprenait à distinguer les distributions, pas les formes
+    - Fix : bruit et duration_frac aléatoires pour TOUS les types
     """
     np.random.seed(seed)
-    
-    print(f"🔨 Génération de {n_positives} positifs + {n_negatives} négatifs...")
-    
+
+    print(f"🔨 Génération Dataset v3.3 : {n_positives} positifs + {n_negatives} négatifs...")
+
     samples = []
     labels = []
-    
+
     # ─── POSITIFS ────────────────────────────────────────────────────────────
-    # Mix : 40% boîtes, 60% U-shapes (plus réaliste)
-    n_box = int(n_positives * 0.4)
+    # 30% boîtes (Hot Jupiters), 70% U-shapes cos² (limb darkening)
+    n_box    = int(n_positives * 0.30)
     n_ushape = n_positives - n_box
-    
+
     for _ in range(n_box):
-        # Profondeur réaliste : 0.05% (super-Terre) à 2% (Hot Jupiter)
-        depth = np.random.uniform(0.0005, 0.02)
-        # Durée : 10% à 30% de la fenêtre (correspond à phase_window=2× durée)
-        duration_frac = np.random.uniform(0.15, 0.35)
-        # Bruit : 100 ppm à 500 ppm (qualité Kepler typique)
-        noise = np.random.uniform(0.0001, 0.0005)
+        depth        = np.random.uniform(0.0001, 0.020)   # 100 ppm → 2%
+        duration_frac = np.random.uniform(0.10, 0.35)
+        noise        = np.random.uniform(0.00005, 0.0004)
         samples.append(_generate_box_transit(depth, duration_frac, noise))
         labels.append(1)
-    
+
     for _ in range(n_ushape):
-        depth = np.random.uniform(0.0005, 0.02)
+        depth        = np.random.uniform(0.0001, 0.015)   # descend à 100 ppm
         duration_frac = np.random.uniform(0.15, 0.35)
-        noise = np.random.uniform(0.0001, 0.0005)
+        noise        = np.random.uniform(0.00005, 0.0003)
         samples.append(_generate_u_shape_transit(depth, duration_frac, noise))
         labels.append(1)
-    
+
     # ─── NÉGATIFS ────────────────────────────────────────────────────────────
-    # Mix diversifié pour ne pas surapprendre un type de faux positif
-    n_v = n_negatives // 4
+    # Règle : bruit ET duration_frac TOUJOURS aléatoires
+    # Sinon le CNN apprend la distribution du bruit, pas la forme du signal.
+    n_v    = n_negatives // 4
+    n_sin  = n_negatives // 4
     n_asym = n_negatives // 4
-    n_noise = n_negatives // 4
-    n_sin = n_negatives - n_v - n_asym - n_noise
-    
+    n_noise = n_negatives - n_v - n_sin - n_asym
+
     for _ in range(n_v):
-        depth = np.random.uniform(0.001, 0.05)  # V profonds = binaires
-        duration_frac = np.random.uniform(0.1, 0.3)
-        noise = np.random.uniform(0.0001, 0.0005)
+        depth        = np.random.uniform(0.001, 0.05)
+        duration_frac = np.random.uniform(0.10, 0.35)    # ← aléatoire
+        noise        = np.random.uniform(0.00005, 0.0004) # ← aléatoire
         samples.append(_generate_v_shape(depth, duration_frac, noise))
         labels.append(0)
-    
-    for _ in range(n_asym):
-        depth = np.random.uniform(0.0005, 0.02)
-        duration_frac = np.random.uniform(0.15, 0.4)
-        noise = np.random.uniform(0.0001, 0.0005)
-        samples.append(_generate_asymmetric_dip(depth, duration_frac, noise))
-        labels.append(0)
-    
-    for _ in range(n_noise):
-        # Bruit varié — du très propre au très bruité
-        noise = np.random.uniform(0.0002, 0.001)
-        samples.append(_generate_pure_noise(noise))
-        labels.append(0)
-    
+
     for _ in range(n_sin):
-        amplitude = np.random.uniform(0.001, 0.01)
-        n_cycles = np.random.uniform(0.5, 2.5)  # 0.5 à 2.5 cycles dans la fenêtre
-        noise = np.random.uniform(0.0001, 0.0005)
+        amplitude = np.random.uniform(0.0005, 0.01)
+        n_cycles  = np.random.uniform(0.5, 2.0)           # ← aléatoire
+        noise     = np.random.uniform(0.00005, 0.0004)    # ← aléatoire
         samples.append(_generate_sinusoidal(amplitude, n_cycles, noise))
         labels.append(0)
-    
+
+    for _ in range(n_asym):
+        depth        = np.random.uniform(0.001, 0.02)
+        duration_frac = np.random.uniform(0.15, 0.40)    # ← aléatoire
+        noise        = np.random.uniform(0.00005, 0.0004) # ← aléatoire
+        samples.append(_generate_asymmetric_dip(depth, duration_frac, noise))
+        labels.append(0)
+
+    for _ in range(n_noise):
+        noise = np.random.uniform(0.0001, 0.001)          # ← aléatoire
+        samples.append(_generate_pure_noise(noise))
+        labels.append(0)
+
     X = np.array(samples).reshape(-1, CNN_INPUT_LENGTH, 1)
     y = np.array(labels, dtype=np.int32)
-    
-    # Mélange du dataset (sinon les positifs sont tous au début)
+
     perm = np.random.permutation(len(y))
-    X = X[perm]
-    y = y[perm]
-    
-    print(f"✅ Dataset construit : X.shape={X.shape}, positifs={int(y.sum())}")
+    X, y = X[perm], y[perm]
+
+    print(f"✅ Dataset v3.3 : X.shape={X.shape}, positifs={int(y.sum())}")
     return X, y

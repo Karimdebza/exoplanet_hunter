@@ -113,8 +113,8 @@ def train_cnn(
     X: np.ndarray,
     y: np.ndarray,
     model_path: str = DEFAULT_MODEL_PATH,
-    epochs: int = 30,
-    batch_size: int = 32,
+    epochs: int = 50,
+    batch_size: int = 64,
     verbose: int = 1,
 ) -> tf.keras.Model:
     """Entraîne le CNN sur des transits phase-foldés normalisés."""

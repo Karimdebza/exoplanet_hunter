@@ -30,8 +30,8 @@ from validation.cnn_model import train_cnn
 if __name__ == "__main__":
     # Génération du dataset synthétique
     X, y = build_synthetic_dataset(
-        n_positives=3000,
-        n_negatives=3000,
+        n_positives=10000,
+        n_negatives=10000,
         seed=42,
     )
     
@@ -39,7 +39,7 @@ if __name__ == "__main__":
     model = train_cnn(
         X, y,
         model_path="models/exoplanet_cnn_v3.h5",
-        epochs=30,
+        epochs=60,
         batch_size=64,
     )
     
