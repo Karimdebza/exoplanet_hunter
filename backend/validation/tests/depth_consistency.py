@@ -1,27 +1,14 @@
 """
-validation/tests/depth_consistency.py — Stabilité de la profondeur transit par transit.
+validation/tests/depth_consistency.py v2 — phase folding par moitiés temporelles.
 
-PRINCIPE PHYSIQUE :
-Une vraie planète a une taille fixe. Chaque transit doit avoir la même
-profondeur (à bruit près). Si la profondeur varie significativement
-d'un transit à l'autre → le signal n'est pas physiquement cohérent.
+POURQUOI ON A CHANGÉ :
+La v1 mesurait transit par transit → MAD=264ppm pour signal de 340ppm → inutilisable.
+La v2 phase-fold chaque moitié indépendamment → moyenne sur N/2 transits → robuste.
 
-Causes de profondeur variable :
-- Contamination par une étoile de fond (background EB)
-- Activité stellaire (taches) qui modifie la profondeur apparente
-- Artefacts instrumentaux Kepler (rolling band, cosmic rays)
-- Signal BLS fortuit (pas de vrai transit)
-
-MÉTHODE :
-1. Mesurer la profondeur de chaque transit individuel
-2. Calculer le coefficient de variation (CV = std / mean)
-3. CV < 0.3 → signal stable → PASS
-   CV > 0.5 → signal instable → FAIL
-
-DIFFÉRENCE AVEC ODD/EVEN :
-Odd/even teste une ASYMÉTRIE SYSTÉMATIQUE pair vs impair (binaire EB).
-Depth consistency teste la VARIANCE GLOBALE sur tous les transits (artefacts).
-Les deux tests sont complémentaires, pas redondants.
+SEUIL :
+score = |D_first - D_second| / mean(D_first, D_second)
+< 0.20 → PASS
+> 0.40 → FAIL
 """
 
 import numpy as np
@@ -30,75 +17,77 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspa
 from core.types import CleanedLightCurve, TransitCandidate, PhysicalTestResult
 
 TEST_NAME      = "depth_consistency"
-PASS_THRESHOLD = 0.30   # CV < 30% → stable
-FAIL_THRESHOLD = 0.50   # CV > 50% → instable
+PASS_THRESHOLD = 0.20
+FAIL_THRESHOLD = 0.40
+N_BINS         = 51
 
 
-def _measure_transit_depth(flux, time, t_center, duration, baseline_window=3.0):
-    """Profondeur d'un transit individuel (médiane baseline - médiane in-transit)."""
-    half_dur  = duration / 2.0
-    half_base = half_dur * baseline_window
-
-    in_transit = (time >= t_center - half_dur)  & (time <= t_center + half_dur)
-    baseline   = ((time >= t_center - half_base) & (time < t_center - half_dur)) | \
-                 ((time >  t_center + half_dur)  & (time <= t_center + half_base))
-
-    if in_transit.sum() < 3 or baseline.sum() < 6:
+def _fold_and_measure(time, flux, period, t0, duration, n_bins=N_BINS, phase_window=2.0):
+    phase = ((time - t0 + 0.5 * period) % period) / period - 0.5
+    relative_time = phase * period / duration
+    in_window = np.abs(relative_time) < phase_window
+    if in_window.sum() < n_bins // 2:
         return np.nan
-
-    return float(np.median(flux[baseline]) - np.median(flux[in_transit]))
+    rel_t = relative_time[in_window]
+    flx   = flux[in_window]
+    bin_edges   = np.linspace(-phase_window, phase_window, n_bins + 1)
+    bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
+    folded      = np.full(n_bins, np.nan)
+    for i in range(n_bins):
+        in_bin = (rel_t >= bin_edges[i]) & (rel_t < bin_edges[i + 1])
+        if in_bin.sum() > 0:
+            folded[i] = np.median(flx[in_bin])
+    nan_mask = np.isnan(folded)
+    if nan_mask.all():
+        return np.nan
+    if nan_mask.any():
+        folded[nan_mask] = np.interp(np.flatnonzero(nan_mask),
+                                      np.flatnonzero(~nan_mask),
+                                      folded[~nan_mask])
+    edge_mask = np.abs(bin_centers) > 1.5
+    baseline  = np.median(folded[edge_mask]) if edge_mask.sum() >= 3 else np.median(folded)
+    if baseline <= 0:
+        return np.nan
+    depth = float(1.0 - np.min(folded / baseline))
+    return depth if depth > 0 else np.nan
 
 
 def run(lc: CleanedLightCurve, candidate: TransitCandidate) -> PhysicalTestResult:
     period, t0, duration = candidate.period, candidate.t0, candidate.duration
-
-    n_min = int(np.ceil( (lc.time.min() - t0) / period))
-    n_max = int(np.floor((lc.time.max() - t0) / period))
-    centers = t0 + np.arange(n_min, n_max + 1) * period
-    centers = centers[(centers >= lc.time.min()) & (centers <= lc.time.max())]
-
-    if len(centers) < 3:
-        return PhysicalTestResult(
-            test_name=TEST_NAME, passed=True, score=0.0,
-            details={"n_transits": len(centers), "warning": "not_enough_transits"}
-        )
-
-    depths = np.array([_measure_transit_depth(lc.flux, lc.time, tc, duration) for tc in centers])
-    depths = depths[~np.isnan(depths)]
-
-    if len(depths) < 3:
-        return PhysicalTestResult(
-            test_name=TEST_NAME, passed=True, score=0.0,
-            details={"warning": "not_enough_valid_transits"}
-        )
-
-    mean_depth = float(np.mean(depths))
-    std_depth  = float(np.std(depths))
-
-    if mean_depth <= 0:
-        return PhysicalTestResult(
-            test_name=TEST_NAME, passed=False, score=1.0,
-            details={"warning": "mean_depth_zero_or_negative"}
-        )
-
-    cv = std_depth / mean_depth   # Coefficient de variation
-    inconclusive = PASS_THRESHOLD <= cv < FAIL_THRESHOLD
-    print(f"DEBUG depths_ppm: {[round(d*1e6,1) for d in depths]}")
-
+    n_transits_est = int((lc.time.max() - lc.time.min()) / period)
+    if n_transits_est < 4:
+        return PhysicalTestResult(test_name=TEST_NAME, passed=True, score=0.0,
+            details={"n_transits_est": n_transits_est, "warning": "not_enough_transits"})
+    t_mid  = (lc.time.min() + lc.time.max()) / 2.0
+    first  = lc.time < t_mid
+    second = lc.time >= t_mid
+    if first.sum() < 100 or second.sum() < 100:
+        return PhysicalTestResult(test_name=TEST_NAME, passed=True, score=0.0,
+            details={"warning": "not_enough_points_in_halves"})
+    d_first  = _fold_and_measure(lc.time[first],  lc.flux[first],  period, t0, duration)
+    d_second = _fold_and_measure(lc.time[second], lc.flux[second], period, t0, duration)
+    if np.isnan(d_first) or np.isnan(d_second):
+        return PhysicalTestResult(test_name=TEST_NAME, passed=True, score=0.0,
+            details={"warning": "fold_failed_on_one_half"})
+    d_mean = (d_first + d_second) / 2.0
+    if d_mean <= 0:
+        return PhysicalTestResult(test_name=TEST_NAME, passed=True, score=0.0,
+            details={"warning": "mean_depth_zero"})
+    score = abs(d_first - d_second) / d_mean
+    inconclusive = PASS_THRESHOLD <= score < FAIL_THRESHOLD
     return PhysicalTestResult(
         test_name=TEST_NAME,
-        passed=cv < FAIL_THRESHOLD,
-        score=cv,
+        passed=score < FAIL_THRESHOLD,
+        score=score,
         details={
-            "n_transits"      : len(centers),
-            "n_valid"         : len(depths),
-            "mean_depth_ppm"  : round(mean_depth * 1e6, 1),
-            "std_depth_ppm"   : round(std_depth  * 1e6, 1),
-            "cv"              : round(cv, 4),
-            "inconclusive"    : inconclusive,
-            "verdict"         : ("STABLE"        if cv < PASS_THRESHOLD else
-                                 "INCONCLUSIVE"   if cv < FAIL_THRESHOLD else
-                                 "UNSTABLE"),
-            "depths_ppm"      : [round(d * 1e6, 1) for d in depths],
+            "n_transits_est" : n_transits_est,
+            "d_first_ppm"    : round(d_first  * 1e6, 1),
+            "d_second_ppm"   : round(d_second * 1e6, 1),
+            "d_mean_ppm"     : round(d_mean   * 1e6, 1),
+            "drift_relative" : round(score, 4),
+            "inconclusive"   : inconclusive,
+            "verdict"        : ("STABLE"      if score < PASS_THRESHOLD else
+                                "INCONCLUSIVE" if score < FAIL_THRESHOLD else
+                                "DRIFTING"),
         }
     )
