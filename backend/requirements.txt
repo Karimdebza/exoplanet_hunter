@@ -11,6 +11,8 @@ scikit-learn
 
 # --- Utilitaires et Graphiques ---
 matplotlib
-
+fastapi
+uvicorn[standard]
+python-multipart
 
 # --- Gestion des avertissements (inclus dans Python, pas besoin d'install) ---
