@@ -50,6 +50,10 @@ import matplotlib.pyplot as plt
 import warnings
 warnings.filterwarnings('ignore')
 
+DEFAULT_MODEL_PATH = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)),
+    "scriptes", "models", "exoplanet_cnn_v3.h5"
+)
 
 # ── App ───────────────────────────────────────────────────────────────────────
 app = FastAPI(title="ExoplanetHunter API", version="1.0.0")
@@ -206,12 +210,9 @@ def _run_pipeline(job_id: str, star_name: str, quarters: list[int],
         _save_history(star_name, quarters, results)
 
     except Exception as e:
-        jobs[job_id].update({
-            "status" : "error",
-            "progress": 1.0,
-            "error"  : str(e),
-            "traceback": traceback.format_exc(),
-        })
+        print(f"PIPELINE ERROR: {e}")
+        print(traceback.format_exc())
+        jobs[job_id].update({...})
 
 
 def _make_plot_b64(folded, cnn_val, phys_val, star_name: str) -> str:
@@ -309,6 +310,7 @@ def start_scan(req: ScanRequest, background_tasks: BackgroundTasks):
         req.quarters,
         req.max_transit_duration_hours,
     )
+    
 
     return ScanResponse(job_id=job_id, message="Scan lancé")
 
