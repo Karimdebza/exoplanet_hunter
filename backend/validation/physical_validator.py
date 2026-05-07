@@ -80,9 +80,7 @@ def _classify(tests: list, cnn_score: float) -> tuple[str, float]:
     else:
         classification = "INCONCLUSIVE"
 
-    # MANQUE cette règle :
-    if cnn_score < 0.5:
-        classification = "INCONCLUSIVE"  # ou carrément reject
+    
 
     # Confidence = moyenne pondérée des (1 - score) pour les tests qui passent
     # score = 0 → parfait, score = 1 → limite du seuil
@@ -134,12 +132,10 @@ def validate(
 
     classification, confidence = _classify(tests, cnn_validation.cnn_score)
 
-# Prérequis : signal doit exister (CNN) ET être statistiquement significatif (SDE)
-    if not cnn_validation.passed or cnn_validation.candidate.sde < 7.0:
-        return PhysicalValidation(
-            candidate=candidate,
-            cnn_validation=cnn_validation,
-            tests=[],
-            classification="NOISE",
-            confidence=round(cnn_validation.cnn_score * 0.5, 3),
-        )
+    return PhysicalValidation(
+        candidate=candidate,
+        cnn_validation=cnn_validation,
+        tests=tests,
+        classification=classification,
+        confidence=confidence,
+    )

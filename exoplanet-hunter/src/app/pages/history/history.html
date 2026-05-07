@@ -1,1 +1,47 @@
-<p>history works!</p>
+<div class="history-page">
+
+      <header class="header">
+        <div class="logo">
+          <span class="logo-icon">◎</span>
+          <span class="logo-text">ExoplanetHunter</span>
+        </div>
+        <nav class="nav">
+          <a routerLink="/" class="nav-link">← Nouvelle recherche</a>
+          <button class="btn-clear" (click)="clearHistory()" *ngIf="entries.length">
+            Vider l'historique
+          </button>
+        </nav>
+      </header>
+
+      <div class="content">
+        <h2 class="page-title">Historique des scans</h2>
+
+        <div class="empty" *ngIf="!entries.length">
+          <p class="empty-icon">🔭</p>
+          <p class="empty-title">Aucun scan effectué</p>
+          <a routerLink="/" class="btn-back">← Lancer un scan</a>
+        </div>
+
+        <div class="entries" *ngIf="entries.length">
+          <div class="entry" *ngFor="let e of entries">
+            <div class="entry-main">
+              <span class="entry-star">{{ e.star_name }}</span>
+              <span class="entry-quarters">Q{{ e.quarters.join(', ') }}</span>
+              <span class="entry-date">{{ formatDate(e.date) }}</span>
+            </div>
+            <div class="entry-results">
+              <span class="entry-count">{{ e.n_candidates }} candidats</span>
+              <span class="entry-planet" *ngIf="e.n_planet_candidates > 0">
+                🪐 {{ e.n_planet_candidates }} planète{{ e.n_planet_candidates > 1 ? 's' : '' }}
+              </span>
+              <div class="entry-best" *ngIf="e.best_candidate">
+                <span class="best-label">Meilleur :</span>
+                <span class="best-period">P={{ e.best_candidate.period.toFixed(3) }}j</span>
+                <span class="best-conf">conf={{ (e.best_candidate.confidence * 100).toFixed(0) }}%</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>

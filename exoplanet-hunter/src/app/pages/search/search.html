@@ -1,1 +1,89 @@
-<p>search works!</p>
+    <div class="search-page">
+
+      <!-- Header -->
+      <header class="header">
+        <div class="logo">
+          <span class="logo-icon">◎</span>
+          <span class="logo-text">ExoplanetHunter</span>
+        </div>
+        <nav>
+          <a routerLink="/history" class="nav-link">Historique</a>
+        </nav>
+      </header>
+
+      <!-- Hero -->
+      <main class="hero">
+        <div class="hero-content">
+          <p class="hero-sub">Pipeline de détection BLS → CNN → Validation physique</p>
+          <h1 class="hero-title">Chassez des exoplanètes<br>dans les données Kepler</h1>
+
+          <!-- Formulaire -->
+          <form [formGroup]="form" (ngSubmit)="onScan()" class="scan-form">
+
+            <div class="field-group">
+              <label class="field-label">Étoile cible</label>
+              <input
+                formControlName="starName"
+                class="field-input"
+                placeholder="ex: Kepler-7, Kepler-90, KIC 11657614"
+                autocomplete="off"
+              />
+              <span class="field-hint">Nom Kepler ou identifiant KIC</span>
+            </div>
+
+            <div class="field-group">
+              <label class="field-label">Quarters Kepler</label>
+              <input
+                formControlName="quarters"
+                class="field-input"
+                placeholder="ex: 3,4,5,6"
+              />
+              <span class="field-hint">Quarters à analyser (1–17, séparés par des virgules)</span>
+            </div>
+
+            <button
+              type="submit"
+              class="btn-scan"
+              [disabled]="form.invalid || scanning"
+            >
+              <span *ngIf="!scanning">▶ Lancer le scan</span>
+              <span *ngIf="scanning">Analyse en cours...</span>
+            </button>
+
+          </form>
+
+          <!-- Progress -->
+          <div class="progress-section" *ngIf="scanning || job">
+            <div class="progress-bar-track">
+              <div
+                class="progress-bar-fill"
+                [style.width.%]="(job?.progress ?? 0) * 100"
+                [class.done]="job?.status === 'done'"
+              ></div>
+            </div>
+            <p class="progress-label">
+              {{ job ? stepLabel(job.step) : 'Initialisation...' }}
+              <span class="progress-pct">{{ ((job?.progress ?? 0) * 100).toFixed(0) }}%</span>
+            </p>
+          </div>
+
+          <!-- Erreur -->
+          <div class="error-box" *ngIf="error">
+            <span class="error-icon">⚠</span> {{ error }}
+          </div>
+
+        </div>
+
+        <!-- Étoiles déco -->
+        <div class="stars-bg" aria-hidden="true">
+          <span *ngFor="let s of stars" class="star"
+            [style.left.%]="s.x"
+            [style.top.%]="s.y"
+            [style.opacity]="s.o"
+            [style.width.px]="s.size"
+            [style.height.px]="s.size">
+          </span>
+        </div>
+      </main>
+
+    </div>

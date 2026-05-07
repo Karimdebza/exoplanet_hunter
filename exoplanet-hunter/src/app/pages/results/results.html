@@ -1,1 +1,125 @@
-<p>results works!</p>
+    <div class="results-page">
+
+      <!-- Header -->
+      <header class="header">
+        <div class="logo">
+          <span class="logo-icon">◎</span>
+          <span class="logo-text">ExoplanetHunter</span>
+        </div>
+        <nav class="nav">
+          <a routerLink="/" class="nav-link">← Nouvelle recherche</a>
+          <a routerLink="/history" class="nav-link">Historique</a>
+        </nav>
+      </header>
+
+      <!-- Meta -->
+      <div class="meta-bar">
+        <div class="meta-info">
+          <span class="meta-star">{{ starName }}</span>
+          <span class="meta-sep">·</span>
+          <span class="meta-quarters">Quarters {{ quarters.join(', ') }}</span>
+          <span class="meta-sep">·</span>
+          <span class="meta-count">{{ candidates.length }} candidats analysés</span>
+        </div>
+        <div class="meta-stats">
+          <span class="stat planet" *ngIf="planetCount > 0">
+            🪐 {{ planetCount }} candidat{{ planetCount > 1 ? 's' : '' }} planète
+          </span>
+          <span class="stat none" *ngIf="planetCount === 0">
+            Aucun candidat planète détecté
+          </span>
+        </div>
+      </div>
+
+      <!-- Empty state -->
+      <div class="empty" *ngIf="!candidates.length">
+        <p class="empty-icon">🔭</p>
+        <p class="empty-title">Aucun signal détecté</p>
+        <p class="empty-sub">Essaie avec plus de quarters ou une autre étoile.</p>
+        <a routerLink="/" class="btn-back">← Nouvelle recherche</a>
+      </div>
+
+      <!-- Candidats -->
+      <div class="candidates" *ngIf="candidates.length">
+        <div
+          class="candidate-card"
+          *ngFor="let c of candidates"
+          [class.planet]="c.classification === 'PLANET_CANDIDATE'"
+        >
+          <!-- Card header -->
+          <div class="card-header">
+            <div class="card-rank">#{{ c.rank }}</div>
+            <div class="card-classification"
+              [style.color]="classConfig(c.classification).color"
+              [style.border-color]="classConfig(c.classification).color + '40'">
+              {{ classConfig(c.classification).icon }}
+              {{ classConfig(c.classification).label }}
+            </div>
+            <div class="card-confidence">
+              <span class="conf-label">Confiance</span>
+              <span class="conf-value">{{ (c.confidence * 100).toFixed(0) }}%</span>
+              <div class="conf-bar">
+                <div class="conf-fill"
+                  [style.width.%]="c.confidence * 100"
+                  [style.background]="classConfig(c.classification).color">
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Métriques -->
+          <div class="metrics">
+            <div class="metric">
+              <span class="metric-label">Période</span>
+              <span class="metric-value">{{ c.period.toFixed(4) }}<span class="metric-unit">j</span></span>
+            </div>
+            <div class="metric">
+              <span class="metric-label">Profondeur</span>
+              <span class="metric-value">{{ c.depth_ppm.toFixed(0) }}<span class="metric-unit">ppm</span></span>
+            </div>
+            <div class="metric">
+              <span class="metric-label">Durée</span>
+              <span class="metric-value">{{ c.duration_hours.toFixed(1) }}<span class="metric-unit">h</span></span>
+            </div>
+            <div class="metric">
+              <span class="metric-label">SDE</span>
+              <span class="metric-value" [class.sde-high]="c.sde >= 7">{{ c.sde.toFixed(1) }}</span>
+            </div>
+            <div class="metric">
+              <span class="metric-label">CNN</span>
+              <span class="metric-value" [class.cnn-pass]="c.cnn_passed">{{ c.cnn_score.toFixed(3) }}</span>
+            </div>
+          </div>
+
+          <!-- Contenu principal : graphique + tests -->
+          <div class="card-body">
+
+            <!-- Graphique phase folding -->
+            <div class="plot-container" *ngIf="c.plot_base64">
+              <img
+                [src]="'data:image/png;base64,' + c.plot_base64"
+                alt="Phase folding candidat {{ c.rank }}"
+                class="plot-img"
+              />
+            </div>
+
+            <!-- Tests physiques -->
+            <div class="tests">
+              <div class="tests-title">Validation physique</div>
+              <div class="test-row" *ngFor="let t of c.tests">
+                <span class="test-icon">{{ t.passed ? '✓' : '✗' }}</span>
+                <span class="test-name" [class.pass]="t.passed" [class.fail]="!t.passed">
+                  {{ testLabel(t.name) }}
+                </span>
+                <span class="test-score">{{ t.score.toFixed(3) }}</span>
+                <span class="test-verdict" *ngIf="t.details['verdict']">
+                  {{ t.details['verdict'] }}
+                </span>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+
+    </div>
