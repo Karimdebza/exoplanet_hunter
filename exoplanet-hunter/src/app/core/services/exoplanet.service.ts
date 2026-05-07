@@ -7,12 +7,15 @@ import {
   catchError, throwError, tap, startWith
 } from 'rxjs';
 import { ScanJob, HistoryEntry } from '../models/scan.model';
+import { environment } from '../../../environments/environment';
+
+
 
 @Injectable({ providedIn: 'root' })
 export class ExoplanetService {
 
   // En dev : localhost:8000 / En prod : ton URL Render
-  private readonly API = 'http://localhost:8000/api';
+  private readonly API = environment.apiUrl;
 
   constructor(private http: HttpClient) {}
 
