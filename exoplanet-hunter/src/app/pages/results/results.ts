@@ -25,6 +25,10 @@ export class ResultsComponent implements OnInit {
     return this.candidates.filter(c => c.classification === 'PLANET_CANDIDATE').length;
   }
 
+  get bestPlanet() {
+    return this.candidates.find(c => c.classification === 'PLANET_CANDIDATE') ?? null;
+  }
+
   constructor(private router: Router) {}
 
   ngOnInit(): void {

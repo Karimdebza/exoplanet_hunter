@@ -38,13 +38,35 @@
       background: #161B22;
       border-bottom: 1px solid #21262D;
     }
-    .meta-info { display: flex; align-items: center; gap: 12px; font-size: 14px; }
+    .meta-info { display: flex; align-items: center; gap: 12px; font-size: 14px; flex-wrap: wrap; }
     .meta-star { font-weight: 600; font-family: monospace; font-size: 16px; color: #58A6FF; }
     .meta-sep { color: #30363D; }
     .meta-quarters, .meta-count { color: #8B949E; }
+    .meta-rstar { color: #8B949E; font-family: monospace; font-size: 13px; }
     .stat { font-size: 13px; font-weight: 500; }
     .stat.planet { color: #3FB950; }
     .stat.none { color: #484F58; }
+
+    /* Planet hero banner */
+    .planet-hero {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+      padding: 20px 48px;
+      background: linear-gradient(90deg, #0d2818 0%, #0D1117 100%);
+      border-bottom: 1px solid #238636;
+    }
+    .planet-hero-icon { font-size: 36px; line-height: 1; }
+    .planet-hero-title {
+      font-size: 13px; color: #3FB950; font-weight: 600;
+      text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px;
+    }
+    .planet-hero-details {
+      display: flex; align-items: center; gap: 10px;
+      font-size: 15px; color: #E6EDF3; font-family: 'JetBrains Mono', monospace;
+    }
+    .hero-sep { color: #30363D; }
+    .hero-rp { color: #4CAF50; font-weight: 600; }
 
     /* Empty */
     .empty {
@@ -74,7 +96,11 @@
       overflow: hidden;
       transition: border-color 0.2s;
       &:hover { border-color: #30363D; }
-      &.planet { border-color: #238636; }
+      &.planet {
+        border-color: #238636;
+        box-shadow: 0 0 0 1px #23863640, 0 4px 24px #23863620;
+        .card-header { background: #0d2818; }
+      }
     }
 
     /* Card header */
@@ -122,6 +148,8 @@
     .metric-unit { font-size: 11px; color: #8B949E; margin-left: 2px; }
     .sde-high { color: #3FB950; }
     .cnn-pass { color: #58A6FF; }
+    .metric-rp { border-left: 1px solid #238636; background: #0a1f0e; }
+    .rp-value { color: #4CAF50; }
 
     /* Card body */
     .card-body {

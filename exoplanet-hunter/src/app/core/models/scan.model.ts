@@ -26,6 +26,8 @@ export interface Candidate {
   confidence: number;
   tests: PhysicalTest[];
   plot_base64: string;
+  r_planet_earth?: number;
+  r_star_solar?: number;
 }
 
 export type ScanStep =
@@ -63,6 +65,12 @@ export interface HistoryEntry {
     classification: Classification;
     confidence: number;
   } | null;
+}
+
+export interface HistoryDetail {
+  star_name: string;
+  quarters: number[];
+  results: Candidate[];
 }
 
 export const STEP_LABELS: Record<ScanStep, string> = {

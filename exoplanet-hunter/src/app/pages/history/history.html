@@ -23,7 +23,16 @@
         </div>
 
         <div class="entries" *ngIf="entries.length">
-          <div class="entry" *ngFor="let e of entries">
+          <div
+            class="entry"
+            *ngFor="let e of entries"
+            [class.has-planet]="e.n_planet_candidates > 0"
+            [class.loading]="loadingId === e.id"
+            (click)="viewEntry(e)"
+            role="button"
+            tabindex="0"
+            (keydown.enter)="viewEntry(e)"
+          >
             <div class="entry-main">
               <span class="entry-star">{{ e.star_name }}</span>
               <span class="entry-quarters">Q{{ e.quarters.join(', ') }}</span>
@@ -39,6 +48,8 @@
                 <span class="best-period">P={{ e.best_candidate.period.toFixed(3) }}j</span>
                 <span class="best-conf">conf={{ (e.best_candidate.confidence * 100).toFixed(0) }}%</span>
               </div>
+              <span class="entry-loading" *ngIf="loadingId === e.id">Chargement...</span>
+              <span class="entry-arrow" *ngIf="loadingId !== e.id">→</span>
             </div>
           </div>
         </div>

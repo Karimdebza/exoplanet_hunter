@@ -6,7 +6,7 @@ import {
   Observable, interval, switchMap, takeWhile,
   catchError, throwError, tap, startWith
 } from 'rxjs';
-import { ScanJob, HistoryEntry } from '../models/scan.model';
+import { ScanJob, HistoryEntry, HistoryDetail } from '../models/scan.model';
 import { environment } from '../../../environments/environment';
 
 
@@ -59,6 +59,15 @@ export class ExoplanetService {
   getHistory(): Observable<HistoryEntry[]> {
     return this.http
       .get<HistoryEntry[]>(`${this.API}/history`)
+      .pipe(catchError(this.handleError));
+  }
+
+  /**
+   * Récupère le détail complet d'une entrée d'historique (avec plots).
+   */
+  getHistoryDetail(id: string): Observable<HistoryDetail> {
+    return this.http
+      .get<HistoryDetail>(`${this.API}/history/${id}`)
       .pipe(catchError(this.handleError));
   }
 

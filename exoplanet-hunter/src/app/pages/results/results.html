@@ -20,6 +20,10 @@
           <span class="meta-quarters">Quarters {{ quarters.join(', ') }}</span>
           <span class="meta-sep">·</span>
           <span class="meta-count">{{ candidates.length }} candidats analysés</span>
+          <span class="meta-sep" *ngIf="candidates[0]?.r_star_solar">·</span>
+          <span class="meta-rstar" *ngIf="candidates[0]?.r_star_solar">
+            R★ = {{ candidates[0].r_star_solar }} R☉
+          </span>
         </div>
         <div class="meta-stats">
           <span class="stat planet" *ngIf="planetCount > 0">
@@ -28,6 +32,23 @@
           <span class="stat none" *ngIf="planetCount === 0">
             Aucun candidat planète détecté
           </span>
+        </div>
+      </div>
+
+      <!-- Hero planet banner -->
+      <div class="planet-hero" *ngIf="bestPlanet">
+        <div class="planet-hero-icon">🪐</div>
+        <div class="planet-hero-info">
+          <div class="planet-hero-title">Candidat planète détecté</div>
+          <div class="planet-hero-details">
+            <span>P = {{ bestPlanet.period.toFixed(4) }}j</span>
+            <span class="hero-sep">·</span>
+            <span>Confiance {{ (bestPlanet.confidence * 100).toFixed(0) }}%</span>
+            <span class="hero-sep" *ngIf="bestPlanet.r_planet_earth">·</span>
+            <span class="hero-rp" *ngIf="bestPlanet.r_planet_earth">
+              Rp ≈ {{ bestPlanet.r_planet_earth }} R⊕
+            </span>
+          </div>
         </div>
       </div>
 
@@ -88,6 +109,10 @@
             <div class="metric">
               <span class="metric-label">CNN</span>
               <span class="metric-value" [class.cnn-pass]="c.cnn_passed">{{ c.cnn_score.toFixed(3) }}</span>
+            </div>
+            <div class="metric metric-rp" *ngIf="c.r_planet_earth">
+              <span class="metric-label">Rayon planète</span>
+              <span class="metric-value rp-value">{{ c.r_planet_earth.toFixed(1) }}<span class="metric-unit">R⊕</span></span>
             </div>
           </div>
 

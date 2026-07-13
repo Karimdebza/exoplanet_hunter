@@ -55,6 +55,30 @@ DEFAULT_MODEL_PATH = os.path.join(
     "scriptes", "models", "exoplanet_cnn_v3.h5"
 )
 
+
+def _get_stellar_params(star_name: str) -> tuple[float, float]:
+    """Query TIC pour R★ et M★. Retourne (1.0, 1.0) si introuvable."""
+    try:
+        from astroquery.mast import Catalogs
+        import astropy.units as u
+
+        results = Catalogs.query_object(star_name, catalog="TIC", radius=0.02 * u.deg)
+        if len(results) == 0:
+            return 1.0, 1.0
+
+        def _safe(val, default=1.0):
+            try:
+                v = float(val)
+                return v if not np.isnan(v) and v > 0 else default
+            except Exception:
+                return default
+
+        r = _safe(results[0]["rad"])
+        m = _safe(results[0]["mass"])
+        return r, m
+    except Exception:
+        return 1.0, 1.0
+
 # ── App ───────────────────────────────────────────────────────────────────────
 app = FastAPI(title="ExoplanetHunter API", version="1.0.0")
 
@@ -72,8 +96,9 @@ app.add_middleware(
 )
 
 # ── State en mémoire (remplacer par Redis en prod) ────────────────────────────
-jobs: dict[str, dict] = {}
-history: list[dict]   = []
+jobs: dict[str, dict]           = {}
+history: list[dict]             = []
+history_details: dict[str, dict] = {}   # id → full results with plots
 executor = ThreadPoolExecutor(max_workers=2)
 
 # CNN chargé une seule fois au démarrage
@@ -136,9 +161,13 @@ def _run_pipeline(job_id: str, star_name: str, quarters: list[int],
             quarters_used=list(quarters),
         )
 
+        # ── Paramètres stellaires TIC ─────────────────────────────────────────
+        r_star, m_star = _get_stellar_params(star_name)
+
         update("bls", 0.30,
                n_points=lc.n_points,
-               duration_days=round(lc.duration_days, 1))
+               duration_days=round(lc.duration_days, 1),
+               r_star_solar=round(r_star, 2))
 
         # ── Couche 2 : BLS ────────────────────────────────────────────────────
         candidates = detect_signals(lc, top_k=5)
@@ -168,10 +197,14 @@ def _run_pipeline(job_id: str, star_name: str, quarters: list[int],
                 continue
 
             cnn_val  = predict(folded, model)
-            phys_val = validate(lc, cnn_val)
+            phys_val = validate(lc, cnn_val, r_star_solar=r_star, m_star_solar=m_star)
 
             # Graphique phase folding → base64
             plot_b64 = _make_plot_b64(folded, cnn_val, phys_val, star_name)
+
+            # Rayon planétaire estimé (Rp/R★ = sqrt(depth), converti en R⊕)
+            rp_over_rstar   = float(np.sqrt(max(0.0, candidate.depth_ppm / 1e6)))
+            r_planet_earth  = round(rp_over_rstar * r_star * 109.076, 2)
 
             results.append({
                 "rank"           : candidate.rank,
@@ -183,6 +216,8 @@ def _run_pipeline(job_id: str, star_name: str, quarters: list[int],
                 "cnn_passed"     : cnn_val.passed,
                 "classification" : phys_val.classification,
                 "confidence"     : phys_val.confidence,
+                "r_planet_earth" : r_planet_earth,
+                "r_star_solar"   : round(r_star, 2),
                 "tests": [
                     {
                         "name"   : t.test_name,
@@ -212,7 +247,11 @@ def _run_pipeline(job_id: str, star_name: str, quarters: list[int],
     except Exception as e:
         print(f"PIPELINE ERROR: {e}")
         print(traceback.format_exc())
-        jobs[job_id].update({...})
+        jobs[job_id].update({
+            "status" : "error",
+            "progress": 1.0,
+            "error"  : str(e),
+        })
 
 
 def _make_plot_b64(folded, cnn_val, phys_val, star_name: str) -> str:
@@ -254,14 +293,15 @@ def _make_plot_b64(folded, cnn_val, phys_val, star_name: str) -> str:
 
 
 def _save_history(star_name: str, quarters: list[int], results: list[dict]):
-    """Sauvegarde dans l'historique en mémoire."""
+    """Sauvegarde dans l'historique en mémoire + détails complets."""
     best = None
     planet_candidates = [r for r in results if r["classification"] == "PLANET_CANDIDATE"]
     if planet_candidates:
         best = max(planet_candidates, key=lambda r: r["confidence"])
 
+    entry_id = str(uuid.uuid4())
     history.insert(0, {
-        "id"          : str(uuid.uuid4()),
+        "id"          : entry_id,
         "star_name"   : star_name,
         "quarters"    : quarters,
         "date"        : datetime.now().isoformat(),
@@ -273,6 +313,18 @@ def _save_history(star_name: str, quarters: list[int], results: list[dict]):
             "confidence"    : best["confidence"],
         } if best else None,
     })
+
+    # Stocker les résultats complets (avec plots) pour la navigation depuis l'historique
+    history_details[entry_id] = {
+        "star_name": star_name,
+        "quarters" : quarters,
+        "results"  : results,
+    }
+
+    # Garder les détails en sync avec l'historique (max 50)
+    if len(history) > 50:
+        old_id = history.pop()["id"]
+        history_details.pop(old_id, None)
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
@@ -329,8 +381,17 @@ def get_history():
     return history[:50]
 
 
+@app.get("/api/history/{entry_id}")
+def get_history_detail(entry_id: str):
+    """Retourne les résultats complets d'une entrée d'historique."""
+    if entry_id not in history_details:
+        raise HTTPException(status_code=404, detail="Entrée introuvable")
+    return history_details[entry_id]
+
+
 @app.delete("/api/history")
 def clear_history():
     """Vide l'historique."""
     history.clear()
+    history_details.clear()
     return {"message": "Historique vidé"}

@@ -37,8 +37,15 @@
       display: flex; justify-content: space-between; align-items: center;
       padding: 16px 20px; background: #161B22;
       border: 1px solid #21262D; border-radius: 10px;
-      transition: border-color 0.2s;
-      &:hover { border-color: #30363D; }
+      cursor: pointer;
+      transition: border-color 0.2s, background 0.2s, transform 0.1s;
+      &:hover { border-color: #30363D; background: #1C2128; transform: translateX(2px); }
+      &:focus-visible { outline: 2px solid #58A6FF; outline-offset: 2px; }
+      &.has-planet {
+        border-color: #1a3a1e;
+        &:hover { border-color: #238636; }
+      }
+      &.loading { opacity: 0.6; pointer-events: none; }
     }
     .entry-main { display: flex; align-items: center; gap: 16px; }
     .entry-star { font-family: monospace; font-size: 15px; font-weight: 600; color: #58A6FF; }
@@ -49,3 +56,6 @@
     .entry-best { display: flex; gap: 8px; color: #8B949E; }
     .best-label { color: #484F58; }
     .best-period, .best-conf { font-family: monospace; }
+    .entry-arrow { color: #484F58; font-size: 16px; transition: color 0.2s; }
+    .entry:hover .entry-arrow { color: #8B949E; }
+    .entry-loading { color: #58A6FF; font-size: 12px; font-style: italic; }

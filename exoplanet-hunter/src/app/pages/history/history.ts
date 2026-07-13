@@ -2,7 +2,7 @@
 
 import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { RouterModule } from '@angular/router';
+import { RouterModule, Router } from '@angular/router';
 import { ExoplanetService } from '../../core/services/exoplanet.service';
 import { HistoryEntry, CLASSIFICATION_CONFIG } from '../../core/models/scan.model';
 
@@ -15,11 +15,30 @@ import { HistoryEntry, CLASSIFICATION_CONFIG } from '../../core/models/scan.mode
 })
 export class HistoryComponent implements OnInit {
   entries: HistoryEntry[] = [];
+  loadingId: string | null = null;
 
-  constructor(private svc: ExoplanetService) {}
+  constructor(private svc: ExoplanetService, private router: Router) {}
 
   ngOnInit(): void {
     this.svc.getHistory().subscribe(h => this.entries = h);
+  }
+
+  viewEntry(entry: HistoryEntry): void {
+    if (this.loadingId) return;
+    this.loadingId = entry.id;
+    this.svc.getHistoryDetail(entry.id).subscribe({
+      next: (detail) => {
+        this.loadingId = null;
+        this.router.navigate(['/results'], {
+          state: {
+            job: { results: detail.results, star_name: detail.star_name, quarters: detail.quarters },
+            starName: detail.star_name,
+            quarters: detail.quarters,
+          }
+        });
+      },
+      error: () => { this.loadingId = null; }
+    });
   }
 
   clearHistory(): void {
